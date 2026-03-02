@@ -11,6 +11,7 @@ app = FastAPI(title="RxReader API", version="1.0.0")
 origins = [
     "http://localhost:3000",
     "http://localhost:5173",
+    "https://rxlens-client.vercel.app"
 ]
 
 app.add_middleware(
