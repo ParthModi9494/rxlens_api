@@ -1,10 +1,10 @@
-from ast import Dict
+
 import base64
 import os
+from typing import Dict, List, Optional
+from datetime import date, datetime
 from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from datetime import date, datetime
-from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
 # ... other imports same as before
 
@@ -49,6 +49,11 @@ class Practitioner(BaseModel):
     )
 
 
+class AlternativeMedicine(BaseModel):
+    name: str = Field(..., description="Medicine name, e.g., 'Amoxillin 500mg'")
+    type: str = Field(..., description="Type: 'alternative' for brand alternatives or 'generic' for generic equivalent")
+
+
 class PrescribedDrug(BaseModel):
     name: str = Field(..., description="Generic or Brand name, e.g., 'Amoxicillin'")
     strength: str = Field(
@@ -65,6 +70,20 @@ class PrescribedDrug(BaseModel):
     instructions: Optional[str] = Field(
         None, description="e.g., 'Take with food, avoid alcohol'"
     )
+    side_effects: List[str] = Field(
+        default_factory=list, 
+        description="Common side effects, e.g., ['Headache', 'Dizziness', 'Nausea']"
+    )
+    contraindications: List[str] = Field(
+        default_factory=list,
+        description="Situations when medicine shouldn't be used, e.g., ['Pregnancy', 'severe liver disease']"
+    )
+    precautions: Optional[str] = Field(
+        None, description="Important warnings and precautions, e.g., 'Avoid driving if dizzy. May interact with alcohol.'"
+    )
+    alternatives: Optional[List[AlternativeMedicine]] = Field(
+        None, description="List of alternative medicines and one generic equivalent with same API and strength"
+    )   
 
 
 class Prescription(BaseModel):
@@ -96,6 +115,10 @@ class Prescription(BaseModel):
     follow_up_date: Optional[date] = Field(None, description="Next suggested visit")
 
 
+# Rebuild the model to ensure all type annotations are properly resolved
+Prescription.model_rebuild()
+
+
 async def extract_prescription_data(image_bytes: bytes):
     # Gemini can take image bytes directly via LangChain
     api_key = os.getenv("GOOGLE_API_KEY")
@@ -118,8 +141,16 @@ async def extract_prescription_data(image_bytes: bytes):
 3. **Decipher Handwriting:** Use medical context to resolve ambiguities.
 4. **Identify Active Ingredients (API):** Determine generic chemical compositions.
 5. **Standardize Instructions:** Convert Latin shorthand (OD, TDS, etc.) to plain English.
+6. **Find Alternative Medicines:** For each prescribed medication:
+   - List 2-3 commonly available alternative brand names with the same active ingredient and strength in India
+   - Identify one generic equivalent (if available) with the same API and strength
+   - Mark each alternative with its type: "alternative" for brand alternatives, "generic" for generic equivalent
+7. **Extract Side Effects & Contraindications:** For each medicine, provide:
+   - **side_effects**: Common or possible adverse reactions (e.g., 'Headache', 'Nausea', 'Dizziness')
+   - **contraindications**: Medical conditions or situations when the medicine should NOT be used
+   - **precautions**: Important warnings, drug interactions, or lifestyle modifications needed
 
-**Constraint:** Return ONLY valid JSON. If unsure, set confidence_score < 0.5.
+**Constraint:** Return ONLY valid JSON. If unsure, set confidence_score < 0.5. Prioritize patient safety awareness.
 """
 
     # LangChain multi-modal message format for Gemini
