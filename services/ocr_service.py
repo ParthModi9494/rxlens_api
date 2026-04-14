@@ -52,6 +52,10 @@ class Practitioner(BaseModel):
 class AlternativeMedicine(BaseModel):
     name: str = Field(..., description="Medicine name, e.g., 'Amoxillin 500mg'")
     type: str = Field(..., description="Type: 'alternative' for brand alternatives or 'generic' for generic equivalent")
+    price_inr: Optional[str] = Field(
+        None,
+        description="Approximate retail price in Indian Rupees as seen on Indian pharmacy sites (1mg, PharmEasy, Netmeds). Format: '₹X–Y / strip of N tablets' or '₹X–Y / tube'. Use null if unknown."
+    )
 
 
 class PrescribedDrug(BaseModel):
@@ -67,6 +71,16 @@ class PrescribedDrug(BaseModel):
     )
     route: str = Field(default="Oral", description="e.g., 'Oral', 'Topical', 'IV'")
     duration: str = Field(..., description="Total time, e.g., '7 days'")
+    purpose: Optional[str] = Field(
+        None,
+        description=(
+            "A simple, patient-friendly one-sentence explanation of WHY this medicine was prescribed. "
+            "Avoid medical jargon. Focus on the condition it treats or the symptom it relieves. "
+            "Examples: 'To fight the bacterial infection in your mouth', "
+            "'To reduce stomach acid and prevent acidity caused by other medicines', "
+            "'To relieve pain, swelling, and inflammation after the dental procedure'."
+        ),
+    )
     instructions: Optional[str] = Field(
         None, description="e.g., 'Take with food, avoid alcohol'"
     )
@@ -81,9 +95,13 @@ class PrescribedDrug(BaseModel):
     precautions: Optional[str] = Field(
         None, description="Important warnings and precautions, e.g., 'Avoid driving if dizzy. May interact with alcohol.'"
     )
+    price_inr: Optional[str] = Field(
+        None,
+        description="Approximate retail price of this prescribed medicine in Indian Rupees as seen on Indian pharmacy sites (1mg, PharmEasy, Netmeds). Format: '₹X–Y / strip of N tablets' or '₹X–Y / tube' or '₹X–Y / bottle'. Use null if unknown."
+    )
     alternatives: Optional[List[AlternativeMedicine]] = Field(
         None, description="List of alternative medicines and one generic equivalent with same API and strength"
-    )   
+    )
 
 
 class Prescription(BaseModel):
@@ -145,7 +163,18 @@ async def extract_prescription_data(image_bytes: bytes):
    - List 2-3 commonly available alternative brand names with the same active ingredient and strength in India
    - Identify one generic equivalent (if available) with the same API and strength
    - Mark each alternative with its type: "alternative" for brand alternatives, "generic" for generic equivalent
-7. **Extract Side Effects & Contraindications:** For each medicine, provide:
+7. **Explain the Purpose (Patient-Friendly):** For each medicine, write a **purpose** field — a single plain-English sentence that tells the patient *why* they are taking this medicine. Write as if explaining to someone with no medical background. Focus on the condition it treats or symptom it relieves, inferred from the diagnosis, complaint, or drug class.
+   - Good: "To fight the bacterial infection in your gums and prevent it from spreading."
+   - Good: "To reduce stomach acid and protect your stomach lining from irritation caused by the other medicines."
+   - Good: "To relieve pain, reduce swelling, and bring down inflammation after your dental procedure."
+   - Bad: "Amoxicillin is a penicillin-type antibiotic." (too clinical, not patient-focused)
+8. **Approximate Indian Market Price:** For each prescribed medicine AND each of its alternatives, provide a **price_inr** field with the approximate retail price in Indian Rupees as listed on Indian pharmacy platforms (1mg, PharmEasy, Netmeds).
+   - Format: "₹X–Y / strip of N tablets", "₹X–Y / tube", "₹X–Y / bottle", etc.
+   - Use real-world price ranges you know from Indian pharmacies, not guesses.
+   - If you are not confident about the price for a specific medicine, return null for that field.
+   - Example: Augmentin 625mg → "₹240–280 / strip of 6 tablets"
+   - Example: Generic Amoxicillin + Clavulanic Acid 625mg → "₹80–120 / strip of 6 tablets"
+9. **Extract Side Effects & Contraindications:** For each medicine, provide:
    - **side_effects**: Common or possible adverse reactions (e.g., 'Headache', 'Nausea', 'Dizziness')
    - **contraindications**: Medical conditions or situations when the medicine should NOT be used
    - **precautions**: Important warnings, drug interactions, or lifestyle modifications needed
